@@ -1,0 +1,39 @@
+{
+  "name": "anthropic-sdk-tools",
+  "version": "1.0.0",
+  "description": "Tools for working with the Anthropic SDK",
+  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "exports": {
+    "import": "./dist/esm/index.js",
+    "require": "./dist/cjs/index.js"
+  },
+  "scripts": {
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:esm": "tsc -p tsconfig.esm.json",
+    "build": "npm run build:cjs && npm run build:esm",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "anthropic",
+    "sdk",
+    "tools",
+    "functions"
+  ],
+  "author": "Fumaz",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "latest",
+    "typescript": "^5.4.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.18.0",
+    "fast-xml-parser": "^4.3.5",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.4"
+  }
+}
