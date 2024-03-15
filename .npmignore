@@ -4,3 +4,6 @@ test
 bun.lockb
 LICENSE
 .gitignore
+.idea
+README.md
+.env

@@ -19,6 +19,8 @@ export type ToolDefinition = {
     function: AsyncFunction;
 }
 
+export type ResponseFormat = 'json' | 'xml' | 'yaml' | 'csv' | 'tsv' | 'html' | 'markdown' | 'latex';
+
 export function getTextFromMessage(message: MessageParam) {
     if (typeof message.content === 'string') {
         return message.content || null;
@@ -39,22 +41,21 @@ export function getTextFromMessage(message: MessageParam) {
 
 export class AnthropicClient {
     private readonly client: Anthropic;
-    private readonly tools: ToolDefinition[];
+    private readonly verbose: boolean;
 
     constructor(options: ClientOptions & {
-        tools?: ToolDefinition[];
+        verbose?: boolean;
     } = {}) {
         this.client = new Anthropic(options);
-        this.tools = options.tools || [];
+        this.verbose = options.verbose || false;
     }
 
-    async invoke(body: MessageCreateParamsNonStreaming & {
+    async runWithTools(body: MessageCreateParamsNonStreaming & {
         tools?: ToolDefinition[]
     }, options?: RequestOptions) {
         const tools = body.tools || [];
-        const allTools = [...this.tools, ...tools];
 
-        let system = allTools.length > 0 ? `In this environment you have access to a set of tools you can use to answer the user's question.
+        let system = tools.length > 0 ? `In this environment you have access to a set of tools you can use to answer the user's question.
 
 You may call them like this:
 <function_calls>
@@ -73,7 +74,7 @@ Here are the tools available:
         const builder = new XMLBuilder();
         const parser = new XMLParser();
 
-        for (const tool of allTools) {
+        for (const tool of tools) {
             system += `<tool_description>\n`;
             system += `<name>${tool.anthropic.tool_name}</name>\n`;
             system += `<description>${tool.anthropic.description}</description>\n`;
@@ -105,12 +106,16 @@ Here are the tools available:
             system += `</tool_description>\n`;
         }
 
-        if (allTools.length > 0) {
+        if (tools.length > 0) {
             system += `</tools>\n`;
             body.stop_sequences = [...(body.stop_sequences || []), '</function_calls>'];
         }
 
         body.system = system + (body.system || '');
+
+        if (this.verbose) {
+            console.log('Sending message:', body);
+        }
 
         let response = await this.client.messages.create(body, options);
 
@@ -173,22 +178,42 @@ Here are the tools available:
                 let functionResults = "<function_results>\n";
 
                 for (const func of functions) {
-                    const tool = allTools.find(tool => tool.anthropic.tool_name === func.name);
+                    const tool = tools.find(tool => tool.anthropic.tool_name === func.name);
 
                     if (!tool) {
                         throw new Error(`Tool ${func.name} not found`);
                     }
 
+                    const zodParameters = tool.anthropic.parameters;
+                    const parsedParameters = zodParameters.safeParse(func.parameters);
+
+                    if (!parsedParameters.success) {
+                        if (this.verbose) {
+                            console.error((parsedParameters as any).error);
+                        }
+
+                        functionResults = `<function_results>\n<error>\nInvalid parameters passed to the function\n</error>\n`;
+                        break;
+                    }
+
                     try {
-                        const result = await tool.function(func.parameters);
-                        functionResults += `<function_result>\n<tool_name>${func.name}</tool_name>\n<result>${result}</result>\n</function_result>\n`;
+                        const result = await tool.function(parsedParameters.data);
+                        functionResults += `<function_result>\n<tool_name>${func.name}</tool_name>\n<result>${JSON.stringify(result)}</result>\n</function_result>\n`;
                     } catch (e: any) {
-                        functionResults = `<function_results>\n<error>\n${e}\n</error>\n`;
+                        if (this.verbose) {
+                            console.error(e);
+                        }
+
+                        functionResults = `<function_results>\n<error>\n${JSON.stringify(e)}\n</error>\n`;
                         break;
                     }
                 }
 
                 functionResults += "</function_results>";
+
+                if (this.verbose) {
+                    console.log('Function results:', functionResults);
+                }
 
                 body.messages = [
                     ...body.messages,
@@ -260,4 +285,39 @@ Here are the tools available:
             })
         }
     }
+
+    async runWithStructuredOutput(body: MessageCreateParamsNonStreaming & {
+        response_format: ResponseFormat
+    }, options?: RequestOptions) {
+        body.system = `You are a ${body.response_format} generator. You will ALWAYS respond with valid ${body.response_format}.\n${body.system || ''}`;
+
+        if (this.verbose) {
+            console.log('Sending message:', body);
+        }
+
+        const response = await this.client.messages.create(body, options);
+
+        body.messages = [
+            ...body.messages,
+            {
+                role: 'assistant',
+                content: response.content
+            }
+        ];
+
+        return {
+            response,
+            fullMessages: body.messages,
+            filteredMessages: body.messages.filter(message => {
+                const text = getTextFromMessage(message);
+
+                if (text === null) {
+                    return true;
+                }
+
+                return !text.includes('<function_calls>') && !text.includes('<function_results>');
+            })
+        }
+    }
+
 }
