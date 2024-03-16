@@ -1,6 +1,6 @@
 {
   "name": "anthropic-sdk-tools",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Tools for working with the Anthropic SDK",
   "type": "module",
   "main": "./dist/cjs/index.js",

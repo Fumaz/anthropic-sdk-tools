@@ -300,6 +300,7 @@ Here are the tools available:
 
         body.system = `You are a ${body.response_format} generator. You will ALWAYS respond with valid ${body.response_format}.${systemSchema}\n${body.system || ''}`;
         delete body.response_format;
+        delete body.schema;
 
         if (this.verbose) {
             console.log('Sending message:', body);
