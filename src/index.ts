@@ -117,6 +117,8 @@ Here are the tools available:
             console.log('Sending message:', body);
         }
 
+        delete body.tools;
+
         let response = await this.client.messages.create(body, options);
 
         body.messages = [
@@ -287,9 +289,17 @@ Here are the tools available:
     }
 
     async runWithStructuredOutput(body: MessageCreateParamsNonStreaming & {
-        response_format: ResponseFormat
+        response_format?: ResponseFormat,
+        schema?: ZodSchema
     }, options?: RequestOptions) {
-        body.system = `You are a ${body.response_format} generator. You will ALWAYS respond with valid ${body.response_format}.\n${body.system || ''}`;
+        if (!body.response_format) {
+            throw new Error('response_format is required');
+        }
+
+        const systemSchema = body.schema ? `\nThis is the schema you MUST ALWAYS follow when returning your response in ${body.response_format}: ${JSON.stringify(zodToJsonSchema(body.schema))}` : null;
+
+        body.system = `You are a ${body.response_format} generator. You will ALWAYS respond with valid ${body.response_format}.${systemSchema}\n${body.system || ''}`;
+        delete body.response_format;
 
         if (this.verbose) {
             console.log('Sending message:', body);
