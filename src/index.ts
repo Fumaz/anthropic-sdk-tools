@@ -89,7 +89,10 @@ Here are the tools available:
                 system += `<parameter>\n`;
                 system += `<name>${key}</name>\n`;
                 system += `<type>${parameterData.type}</type>\n`;
-                system += `<description>${parameterData.description}</description>\n`;
+
+                if (parameterData.description) {
+                    system += `<description>${parameterData.description}</description>\n`;
+                }
 
                 if (parameterData.type === 'array' && parameterData.items) {
                     system += `<items>${builder.build(parameterData.items.properties)}</items>\n`;
