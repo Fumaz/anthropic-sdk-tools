@@ -56,6 +56,7 @@ export class AnthropicClient {
         const tools = body.tools || [];
 
         let system = tools.length > 0 ? `In this environment you have access to a set of tools you can use to answer the user's question.
+You need to pass every parameter, even those marked as nullable, to the function call.
 
 You may call them like this:
 <function_calls>
