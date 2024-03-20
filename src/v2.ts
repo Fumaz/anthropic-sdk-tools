@@ -150,13 +150,15 @@ export class AnthropicClientV2 {
             system += `In this environment you have access to a set of tools you can use to answer the user's questions.
 You will be given the name and description of each tool, and you just need to call the tool by name. Another model will handle calling the tool with the correct parameters. You MUST NOT write any parameters yourself.
 
-You may call one or more tools like this:
+You may call one or more tools like this, the tools will be called in the order they are listed, but the result of each tool will NOT be passed to the next tool:
 <function_calls>
 <invoke>
 <tool_name>$TOOL_NAME</tool_name>
+<context>$ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
 </invoke>
 <invoke>
 <tool_name>$TOOL_NAME</tool_name>
+<context>$ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
 </invoke>
 ...
 </function_calls>
@@ -222,7 +224,10 @@ Here are the tools available:
         ];
     }
 
-    private extractFunctionCalls(text: string): string[] {
+    private extractFunctionCalls(text: string): {
+        tool_name: string;
+        context: string;
+    }[] {
         if (!text.includes('<function_calls>')) {
             return [];
         }
@@ -233,11 +238,20 @@ Here are the tools available:
         const parsed = new XMLParser().parse(functionCalls);
         const calls = parsed.function_calls;
 
-        return Array.isArray(calls) ? calls.map(call => call.invoke.tool_name) : [calls.invoke.tool_name];
+        return Array.isArray(calls) ? calls.map(call => ({
+            tool_name: call.invoke.tool_name,
+            context: call.invoke.context
+        })) : [{
+            tool_name: calls.invoke.tool_name,
+            context: calls.invoke.context
+        }];
     }
 
     private async* invokeFunctions(
-        functionCallsArray: string[],
+        functionCallsArray: {
+            tool_name: string;
+            context: string;
+        }[],
         tools: ToolDefinition[],
         tools_model: Anthropic.MessageCreateParams['model'],
         body: Anthropic.MessageCreateParams,
@@ -248,7 +262,7 @@ Here are the tools available:
         let functionResults = "<function_results>\n";
 
         for (const func of functionCallsArray) {
-            const tool = tools.find(tool => tool.anthropic.tool_name === func);
+            const tool = tools.find(tool => tool.anthropic.tool_name === func.tool_name);
 
             if (!tool) {
                 throw new Error(`Tool ${func} not found`);
@@ -259,7 +273,7 @@ Here are the tools available:
                 tool: tool
             };
 
-            for await (const result of this.invokeFunction(tool, tools_model, body.messages, options)) {
+            for await (const result of this.invokeFunction(tool, tools_model, func.context, options)) {
                 if (result.error) {
                     yield {
                         type: 'tool_error',
@@ -305,7 +319,7 @@ Here are the tools available:
     private async* invokeFunction(
         tool: ToolDefinition,
         tools_model: Anthropic.MessageCreateParams['model'],
-        messages: Anthropic.MessageParam[],
+        context: string,
         options?: Anthropic.RequestOptions
     ): AsyncGenerator<{
         data?: any;
@@ -319,7 +333,10 @@ Here are the tools available:
 The name of the tool you MUST call is ${tool.anthropic.tool_name}, and the description is ${tool.anthropic.description}. You must ALWAYS return JSON. Wrap the JSON in <parameters> and </parameters>. The JSON MUST be valid JSON. Do not return anything else.
 You will return the parameters in JSON format following this JSON schema accurately. You must NOT return a JSON schema, but a valid JSON object that follows this schema:
 ${JSON.stringify(zodToJsonSchema(tool.anthropic.parameters))}`,
-            messages: [...messages],
+            messages: [{
+                role: 'user',
+                content: context
+            }],
             stop_sequences: ['</parameters>'],
             max_tokens: 4000
         }, options);
