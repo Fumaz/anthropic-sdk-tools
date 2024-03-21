@@ -4,11 +4,11 @@ import {XMLParser} from "fast-xml-parser";
 import {Stream} from "@anthropic-ai/sdk/streaming";
 import {zodToJsonSchema} from "zod-to-json-schema";
 
-type AnthropicMessage = Anthropic.MessageParam & {
+export type AnthropicMessage = Anthropic.MessageParam & {
     hidden?: boolean;
 }
 
-type AnthropicStreamEvent = |
+export type AnthropicStreamEvent = |
     (Anthropic.Messages.MessageStreamEvent |
         {
             type: 'tool_invoke';
