@@ -154,11 +154,11 @@ You may call one or more tools like this, the tools will be called in the order 
 <function_calls>
 <invoke>
 <tool_name>$TOOL_NAME</tool_name>
-<context>$ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
+<context>$USER_QUESTION_AND_ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
 </invoke>
 <invoke>
 <tool_name>$TOOL_NAME</tool_name>
-<context>$ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
+<context>$USER_QUESTION_AND_ALL_NECESSARY_CONTEXT_TO_SEND_TO_THE_OTHER_MODEL</context>
 </invoke>
 ...
 </function_calls>
@@ -364,11 +364,19 @@ ${JSON.stringify(zodToJsonSchema(tool.anthropic.parameters))}`,
 
         const finalText = jsonParametersContent.map(c => c.text).join('');
 
+        if (this.verbose) {
+            console.log('Final text:', finalText);
+        }
+
         let jsonParameters: any;
 
         try {
-            jsonParameters = JSON.parse(finalText.replace(/<parameters>(.*)<\/parameters>/, '$1'));
+            jsonParameters = JSON.parse(finalText.replace('<parameters>', '').replace('</parameters>', ''));
         } catch (e: any) {
+            if (this.verbose) {
+                console.error(e);
+            }
+
             yield {error: e};
             return;
         }
